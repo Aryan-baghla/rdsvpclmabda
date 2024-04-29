@@ -8,9 +8,9 @@ Resources:
       CidrBlock: '10.0.0.0/16'
       EnableDnsSupport: true
       EnableDnsHostnames: true
-    Tags:
-      - Key: Name
-        Value: Task1VPC
+      Tags:
+        - Key: Name
+          Value: Task1VPC
   Subnet1:
     Type: AWS::EC2::Subnet
     Properties:

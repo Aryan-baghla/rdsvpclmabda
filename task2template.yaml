@@ -8,9 +8,9 @@ Resources:
       CidrBlock: '10.0.0.0/16'
       EnableDnsSupport: true
       EnableDnsHostnames: true
-    Tags:
-      - Key: Name
-        Value: Task2VPC
+      Tags:
+        - Key: Name
+          Value: Task2VPC
   Subnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -66,7 +66,7 @@ Resources:
       AllocatedStorage: '20'
       DBInstanceClass: db.t3.micro
       EngineVersion: '8.0.36'
-      PubliclyAccessible: true
+      PubliclyAccessible: false
       DBSubnetGroupName: !Ref RDSSubnetGroup
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
@@ -120,5 +120,5 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       ServiceName: !Sub "com.amazonaws.${AWS::Region}.secretsmanager"
-      RouteTableIds:
-        - !Ref RouteTable
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
