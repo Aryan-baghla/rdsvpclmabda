@@ -1,0 +1,125 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: '10.0.0.0/16'
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+    Tags:
+      - Key: Name
+        Value: Task2VPC
+        
+  Subnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.1.0/24'
+      AvailabilityZone: 'us-west-2a' 
+  
+  Subnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.2.0/24'
+      AvailabilityZone: 'us-west-2b' 
+
+  RDSSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: RDSSubnetGroup
+      DBSubnetGroupDescription: Subnet group for RDS
+      SubnetIds:
+        - !Ref Subnet1
+        - !Ref Subnet2
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '3306'
+          ToPort: '3306'
+          CidrIp: 0.0.0.0/0
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  Subnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref Subnet2
+      RouteTableId: !Ref RouteTable
+
+  RDSDatabase:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName: sqldb
+      Engine: mysql
+      MasterUsername: user
+      ManageMasterUserPassword: true
+      AllocatedStorage: '20'
+      DBInstanceClass: db.t3.micro
+      EngineVersion: '8.0.36'
+      PubliclyAccessible: true
+      DBSubnetGroupName: !Ref RDSSubnetGroup
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+
+  PythonLambdaLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: PythonLambdaLayer
+      ContentUri: ./PythonLambdaLayer/
+      CompatibleRuntimes:
+        - python3.9
+
+  Task1function:
+    Type: AWS::Serverless::Function
+    DependsOn: RDSDatabase
+    Properties:
+      Handler: app.handler
+      Runtime: python3.9
+      CodeUri: ./Taskfunction
+      Layers:
+        - !Ref PythonLambdaLayer
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:*
+              Resource: "*"
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: "*"
+            - Effect: Allow
+              Action:
+                - kms:Decrypt
+              Resource: "*"
+      Environment:
+        Variables:
+          DB_HOST: !GetAtt RDSDatabase.Endpoint.Address
+          DB_SECRET_ARN: !GetAtt RDSDatabase.MasterUserSecret.SecretArn
+          DB_PORT: !GetAtt RDSDatabase.Endpoint.Port
+          DB_NAME: sqldb
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref RDSSecurityGroup
+        SubnetIds:
+          - !Ref Subnet1
+          - !Ref Subnet2
+          
+  SecretsManagerVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.secretsmanager"
+      RouteTableIds:
+        - !Ref RouteTable
